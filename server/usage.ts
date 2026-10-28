@@ -131,7 +131,7 @@ export function createUsageHandlers(dependencies: UsageDependencies) {
                 await request("loadCodeAssist", token, userAgent, fetchApi, AbortSignal.any([signal, planSignal])),
               )).catch(() => null),
             ]);
-            return mapQuotaSummary(document, planLabel);
+            return mapQuotaSummary(document, planLabel, now());
           };
           let report: UsageReport;
           try {

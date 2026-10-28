@@ -14,6 +14,7 @@ import { UsageError } from "./errors.js";
 const BUCKETS = [
   { id: "gemini-5h", label: "Gemini · 5h", shortLabel: "Gemini 5h" },
   { id: "gemini-weekly", label: "Gemini · Weekly", shortLabel: "Gemini wk" },
+  { id: "gemini-argon-wtu-weekly", label: "Argon · Weekly", shortLabel: "Argon wk" },
   { id: "3p-5h", label: "Claude & GPT · 5h", shortLabel: "3P 5h" },
   { id: "3p-weekly", label: "Claude & GPT · Weekly", shortLabel: "3P wk" },
 ] as const;
@@ -26,6 +27,29 @@ const bucketSchema = z.object({
   resetTime: z.unknown().optional(),
 });
 type Bucket = z.infer<typeof bucketSchema>;
+
+export function formatRemainingReset(
+  resetTimeMs: number,
+  nowMs: number,
+): string {
+  const diffMs = resetTimeMs - nowMs;
+  if (diffMs <= 0) return "Ready to reset";
+  const totalMins = Math.floor(diffMs / 60_000);
+  const days = Math.floor(totalMins / (24 * 60));
+  const hours = Math.floor((totalMins % (24 * 60)) / 60);
+  const mins = totalMins % 60;
+
+  if (days > 0) {
+    return `${days}d ${hours}h ${mins}m`;
+  }
+  if (hours > 0) {
+    return `${hours}h ${mins}m`;
+  }
+  if (mins > 0) {
+    return `${mins}m`;
+  }
+  return "< 1m";
+}
 
 export function readTierLabel(document: unknown): string | null {
   const tier = z.object({ id: z.string().min(1) });
@@ -53,6 +77,7 @@ export function readTierLabel(document: unknown): string | null {
 export function mapQuotaSummary(
   document: unknown,
   planLabel: string | null = null,
+  nowMs: number = Date.now(),
 ): UsageReport {
   const parsed = summarySchema.safeParse(document);
   if (!parsed.success) throw new UsageError("Antigravity returned an invalid quota summary (expected groups).");
@@ -98,6 +123,17 @@ export function mapQuotaSummary(
   }
   if (windows.some((window) => window.usedPct === null)) {
     details.push({ id: "missing-buckets", label: "Quota data", value: "Some quota buckets were omitted or had no valid reading; their usage is unknown, not zero." });
+  }
+  for (const { id, label } of BUCKETS) {
+    const bucket = byId.get(id);
+    const resetsAtMs = timestampMs(bucket?.resetTime);
+    if (resetsAtMs !== null) {
+      details.push({
+        id: `${id}-reset`,
+        label: `${label} reset`,
+        value: formatRemainingReset(resetsAtMs, nowMs),
+      });
+    }
   }
   return {
     status: "available",

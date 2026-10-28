@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createNodeProbe, type CommandResult } from "./probe.js";
 import { createUsageHandlers } from "./usage.js";
+import { formatRemainingReset } from "./quota.js";
 
 const NOW = Date.parse("2030-01-01T00:00:00Z");
 const BINARY = "C:\\Users\\test\\AppData\\Local\\agy\\bin\\agy.exe";
@@ -12,8 +13,9 @@ const json = (body: unknown, status = 200) => new Response(JSON.stringify(body),
 const quota = (buckets: unknown[]) => ({ groups: [{ buckets }] });
 const QUOTA = quota([
   { bucketId: "3p-weekly", remainingFraction: 0 },
-  { bucketId: "3p-5h", remainingFraction: 0.1 },
+  { bucketId: "3p-5h", remainingFraction: 0.1, resetTime: "2030-01-01T02:30:00Z" },
   { bucketId: "gemini-weekly", remainingFraction: 0.25, resetTime: "2030-01-08T00:00:00Z" },
+  { bucketId: "gemini-argon-wtu-weekly", remainingFraction: 0.8 },
   { bucketId: "gemini-5h", remainingFraction: 1 },
 ]);
 
@@ -68,10 +70,14 @@ test("a signed-in account produces the email footer, plan badge and four quota w
   assert.ok(report.status === "available");
   assert.equal(report.planLabel, "Google AI Pro");
   assert.deepEqual(report.windows.map(({ id, remainingPct }) => [id, remainingPct]), [
-    ["gemini-5h", 100], ["gemini-weekly", 25], ["3p-5h", 10], ["3p-weekly", 0],
+    ["gemini-5h", 100], ["gemini-weekly", 25], ["gemini-argon-wtu-weekly", 80], ["3p-5h", 10], ["3p-weekly", 0],
   ]);
   assert.equal(report.windows.find(({ id }) => id === "gemini-weekly")?.resetsAt, "2030-01-08T00:00:00.000Z");
-  assert.deepEqual(report.details, []); // No duplicate Plan or Account rows.
+  assert.equal(report.windows.find(({ id }) => id === "3p-5h")?.label, "Claude & GPT · 5h");
+  assert.deepEqual(report.details, [
+    { id: "gemini-weekly-reset", label: "Gemini · Weekly reset", value: "7d 0h 0m" },
+    { id: "3p-5h-reset", label: "Claude & GPT · 5h reset", value: "2h 30m" },
+  ]);
 });
 
 test("Windows 在没有 pwsh 和 PowerShell PATH 时仍能读取登录并获取额度", async () => {
@@ -113,7 +119,7 @@ test("free-tier cards explain the plan while omitted quotas remain unknown", asy
     : quota([{ bucketId: "gemini-weekly", remainingFraction: 0.5 }])) }).fetch(INPUT);
   assert.ok(report.status === "available");
   assert.equal(report.planLabel, "Free tier");
-  assert.deepEqual(report.windows.map(({ remainingPct }) => remainingPct), [null, 50, null, null]);
+  assert.deepEqual(report.windows.map(({ remainingPct }) => remainingPct), [null, 50, null, null, null]);
   assert.ok(report.details?.some(({ value }) => value.includes("weekly buckets")));
 });
 
@@ -218,4 +224,13 @@ test("switching the CLI login updates both the discovered account and fetched qu
   const report = await api.fetch(original.input);
   assert.ok(report.status === "available");
   assert.equal(report.windows.find(({ id }) => id === "gemini-weekly")?.remainingPct, 80);
+});
+
+test("formatRemainingReset accurately formats days, hours, and minutes countdowns", () => {
+  const base = Date.parse("2030-01-01T12:00:00Z");
+  assert.equal(formatRemainingReset(base + 2 * 3600_000 + 35 * 60_000, base), "2h 35m");
+  assert.equal(formatRemainingReset(base + 45 * 60_000, base), "45m");
+  assert.equal(formatRemainingReset(base + 3 * 86400_000 + 12 * 3600_000 + 5 * 60_000, base), "3d 12h 5m");
+  assert.equal(formatRemainingReset(base + 30_000, base), "< 1m");
+  assert.equal(formatRemainingReset(base - 1000, base), "Ready to reset");
 });

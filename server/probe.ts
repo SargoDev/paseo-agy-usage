@@ -1,6 +1,6 @@
 import { execCommand } from "@getpaseo/plugin/server";
 import { constants } from "node:fs";
-import { access, stat } from "node:fs/promises";
+import { access, readFile, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import { posix, win32 } from "node:path";
 import { z } from "zod";
@@ -229,6 +229,13 @@ export function createNodeProbe(options: ProbeOptions = {}): AntigravityProbe {
         ], signal);
         if (result.exitCode === 44) return null; // errSecItemNotFound
       } else if (platform === "linux") {
+        const tokenFile = posix.join(home, ".gemini", "antigravity-cli", "antigravity-oauth-token");
+        try {
+          const rawFile = await readFile(tokenFile, "utf8");
+          if (rawFile && rawFile.trim()) {
+            return parseStoredCredential(rawFile.trim());
+          }
+        } catch {}
         // Requires libsecret's secret-tool and an unlocked Secret Service session.
         result = await run("secret-tool", ["lookup", "service", "gemini", "username", "antigravity"], signal);
         if (result.exitCode === 1 && !result.hasDiagnostic) return null;
