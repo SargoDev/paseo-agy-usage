@@ -165,7 +165,7 @@ export function mapQuotaSummary(
       });
     }
   }
-  const DIVIDER_LINE = "─".repeat(70);
+  const DIVIDER_LINE = "─".repeat(50);
   for (let i = 0; i < resetRows.length; i++) {
     const row = resetRows[i];
     if (!row) continue;

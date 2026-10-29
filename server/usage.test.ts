@@ -76,7 +76,7 @@ test("a signed-in account produces the email footer, plan badge and four quota w
   assert.equal(report.windows.find(({ id }) => id === "3p-5h")?.label, "Claude & GPT · 5h");
   assert.deepEqual(report.details, [
     { id: "gemini-weekly-reset", label: "Gemini · Weekly reset", value: "7d 0h 0m (08.01.2030 01:00) 🟢" },
-    { id: "reset-divider-1", label: "─".repeat(70), value: "" },
+    { id: "reset-divider-1", label: "─".repeat(50), value: "" },
     { id: "3p-5h-reset", label: "Claude & GPT · 5h reset", value: "2h 30m (01.01.2030 03:30) 🟢" },
   ]);
 });
@@ -248,7 +248,7 @@ test("quota reset details include dividers and green/red status dots based on re
   assert.equal(report.status, "available");
   assert.deepEqual(report.details, [
     { id: "gemini-5h-reset", label: "Gemini · 5h reset", value: "5h 0m (01.01.2030 06:00) 🔴" },
-    { id: "reset-divider-1", label: "─".repeat(70), value: "" },
+    { id: "reset-divider-1", label: "─".repeat(50), value: "" },
     { id: "3p-5h-reset", label: "Claude & GPT · 5h reset", value: "4h 0m (01.01.2030 05:00) 🟢" },
   ]);
 });
