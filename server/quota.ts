@@ -51,6 +51,29 @@ export function formatRemainingReset(
   return "< 1m";
 }
 
+export function formatResetDate(
+  dateOrMs: number | Date,
+  timeZone: string = process.env.TZ || "Europe/Warsaw",
+): string {
+  const d = typeof dateOrMs === "number" ? new Date(dateOrMs) : dateOrMs;
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(d);
+  const findPart = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+  const day = findPart("day");
+  const month = findPart("month");
+  const year = findPart("year");
+  const hour = findPart("hour");
+  const minute = findPart("minute");
+  return `${day}.${month}.${year} ${hour}:${minute}`;
+}
+
 export function readTierLabel(document: unknown): string | null {
   const tier = z.object({ id: z.string().min(1) });
   const parsed = z.object({
@@ -78,6 +101,7 @@ export function mapQuotaSummary(
   document: unknown,
   planLabel: string | null = null,
   nowMs: number = Date.now(),
+  timeZone: string = process.env.TZ || "Europe/Warsaw",
 ): UsageReport {
   const parsed = summarySchema.safeParse(document);
   if (!parsed.success) throw new UsageError("Antigravity returned an invalid quota summary (expected groups).");
@@ -132,10 +156,12 @@ export function mapQuotaSummary(
       const remaining = bucket?.remainingFraction;
       const isUsed = typeof remaining === "number" && Number.isFinite(remaining) ? remaining < 1 : false;
       const statusDot = isUsed ? "🟢" : "🔴";
+      const timeRemaining = formatRemainingReset(resetsAtMs, nowMs);
+      const exactDate = formatResetDate(resetsAtMs, timeZone);
       resetRows.push({
         id: `${id}-reset`,
         label: `${label} reset`,
-        value: `${formatRemainingReset(resetsAtMs, nowMs)} ${statusDot}`,
+        value: `${timeRemaining} (${exactDate}) ${statusDot}`,
       });
     }
   }
