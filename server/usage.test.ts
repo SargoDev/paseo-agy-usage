@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { createNodeProbe, type CommandResult } from "./probe.js";
 import { createUsageHandlers } from "./usage.js";
-import { formatRemainingReset } from "./quota.js";
+import { formatRemainingReset, mapQuotaSummary } from "./quota.js";
 
 const NOW = Date.parse("2030-01-01T00:00:00Z");
 const BINARY = "C:\\Users\\test\\AppData\\Local\\agy\\bin\\agy.exe";
@@ -75,8 +75,9 @@ test("a signed-in account produces the email footer, plan badge and four quota w
   assert.equal(report.windows.find(({ id }) => id === "gemini-weekly")?.resetsAt, "2030-01-08T00:00:00.000Z");
   assert.equal(report.windows.find(({ id }) => id === "3p-5h")?.label, "Claude & GPT · 5h");
   assert.deepEqual(report.details, [
-    { id: "gemini-weekly-reset", label: "Gemini · Weekly reset", value: "7d 0h 0m" },
-    { id: "3p-5h-reset", label: "Claude & GPT · 5h reset", value: "2h 30m" },
+    { id: "gemini-weekly-reset", label: "Gemini · Weekly reset", value: "7d 0h 0m 🟢" },
+    { id: "reset-divider-1", label: "─".repeat(70), value: "" },
+    { id: "3p-5h-reset", label: "Claude & GPT · 5h reset", value: "2h 30m 🟢" },
   ]);
 });
 
@@ -233,4 +234,21 @@ test("formatRemainingReset accurately formats days, hours, and minutes countdown
   assert.equal(formatRemainingReset(base + 3 * 86400_000 + 12 * 3600_000 + 5 * 60_000, base), "3d 12h 5m");
   assert.equal(formatRemainingReset(base + 30_000, base), "< 1m");
   assert.equal(formatRemainingReset(base - 1000, base), "Ready to reset");
+});
+
+test("quota reset details include dividers and green/red status dots based on remainingFraction", () => {
+  const document = quota([
+    { bucketId: "gemini-5h", remainingFraction: 1, resetTime: "2030-01-01T05:00:00Z" },
+    { bucketId: "gemini-weekly", remainingFraction: 1 },
+    { bucketId: "gemini-argon-wtu-weekly", remainingFraction: 1 },
+    { bucketId: "3p-5h", remainingFraction: 0.85, resetTime: "2030-01-01T04:00:00Z" },
+    { bucketId: "3p-weekly", remainingFraction: 1 },
+  ]);
+  const report = mapQuotaSummary(document, null, NOW);
+  assert.equal(report.status, "available");
+  assert.deepEqual(report.details, [
+    { id: "gemini-5h-reset", label: "Gemini · 5h reset", value: "5h 0m 🔴" },
+    { id: "reset-divider-1", label: "─".repeat(70), value: "" },
+    { id: "3p-5h-reset", label: "Claude & GPT · 5h reset", value: "4h 0m 🟢" },
+  ]);
 });

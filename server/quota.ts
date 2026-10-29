@@ -124,16 +124,33 @@ export function mapQuotaSummary(
   if (windows.some((window) => window.usedPct === null)) {
     details.push({ id: "missing-buckets", label: "Quota data", value: "Some quota buckets were omitted or had no valid reading; their usage is unknown, not zero." });
   }
+  const resetRows: UsageDetail[] = [];
   for (const { id, label } of BUCKETS) {
     const bucket = byId.get(id);
     const resetsAtMs = timestampMs(bucket?.resetTime);
     if (resetsAtMs !== null) {
-      details.push({
+      const remaining = bucket?.remainingFraction;
+      const isUsed = typeof remaining === "number" && Number.isFinite(remaining) ? remaining < 1 : false;
+      const statusDot = isUsed ? "🟢" : "🔴";
+      resetRows.push({
         id: `${id}-reset`,
         label: `${label} reset`,
-        value: formatRemainingReset(resetsAtMs, nowMs),
+        value: `${formatRemainingReset(resetsAtMs, nowMs)} ${statusDot}`,
       });
     }
+  }
+  const DIVIDER_LINE = "─".repeat(70);
+  for (let i = 0; i < resetRows.length; i++) {
+    const row = resetRows[i];
+    if (!row) continue;
+    if (i > 0) {
+      details.push({
+        id: `reset-divider-${i}`,
+        label: DIVIDER_LINE,
+        value: "",
+      });
+    }
+    details.push(row);
   }
   return {
     status: "available",
