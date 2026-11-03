@@ -73,12 +73,9 @@ test("a signed-in account produces the email footer, plan badge and four quota w
     ["gemini-5h", 100], ["gemini-weekly", 25], ["gemini-argon-wtu-weekly", 80], ["3p-5h", 10], ["3p-weekly", 0],
   ]);
   assert.equal(report.windows.find(({ id }) => id === "gemini-weekly")?.resetsAt, "2030-01-08T00:00:00.000Z");
-  assert.equal(report.windows.find(({ id }) => id === "3p-5h")?.label, "Claude & GPT · 5h");
-  assert.deepEqual(report.details, [
-    { id: "gemini-weekly-reset", label: "Gemini · Weekly reset", value: "7d 0h 0m (08.01.2030 01:00) 🟢" },
-    { id: "reset-divider-1", label: "─".repeat(50), value: "" },
-    { id: "3p-5h-reset", label: "Claude & GPT · 5h reset", value: "2h 30m (01.01.2030 03:30) 🟢" },
-  ]);
+  assert.equal(report.windows.find(({ id }) => id === "gemini-5h")?.label, "🔴 Gemini · 5h");
+  assert.equal(report.windows.find(({ id }) => id === "3p-5h")?.label, "🟢 Claude & GPT · 5h");
+  assert.deepEqual(report.details, []);
 });
 
 test("Windows 在没有 pwsh 和 PowerShell PATH 时仍能读取登录并获取额度", async () => {
@@ -236,7 +233,7 @@ test("formatRemainingReset accurately formats days, hours, and minutes countdown
   assert.equal(formatRemainingReset(base - 1000, base), "Ready to reset");
 });
 
-test("quota reset details include dividers and green/red status dots based on remainingFraction", () => {
+test("quota window labels include green/red status dots based on remainingFraction", () => {
   const document = quota([
     { bucketId: "gemini-5h", remainingFraction: 1, resetTime: "2030-01-01T05:00:00Z" },
     { bucketId: "gemini-weekly", remainingFraction: 1 },
@@ -246,11 +243,11 @@ test("quota reset details include dividers and green/red status dots based on re
   ]);
   const report = mapQuotaSummary(document, null, NOW, "Europe/Warsaw");
   assert.equal(report.status, "available");
-  assert.deepEqual(report.details, [
-    { id: "gemini-5h-reset", label: "Gemini · 5h reset", value: "5h 0m (01.01.2030 06:00) 🔴" },
-    { id: "reset-divider-1", label: "─".repeat(50), value: "" },
-    { id: "3p-5h-reset", label: "Claude & GPT · 5h reset", value: "4h 0m (01.01.2030 05:00) 🟢" },
-  ]);
+  assert.equal(report.windows.find(({ id }) => id === "gemini-5h")?.label, "🔴 Gemini · 5h");
+  assert.equal(report.windows.find(({ id }) => id === "gemini-5h")?.shortLabel, "🔴 Gemini 5h");
+  assert.equal(report.windows.find(({ id }) => id === "3p-5h")?.label, "🟢 Claude & GPT · 5h");
+  assert.equal(report.windows.find(({ id }) => id === "3p-5h")?.shortLabel, "🟢 3P 5h");
+  assert.deepEqual(report.details, []);
 });
 
 test("formatResetDate formats timestamp into DD.MM.YYYY HH:mm in target timezone", () => {

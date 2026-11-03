@@ -100,8 +100,8 @@ export function readTierLabel(document: unknown): string | null {
 export function mapQuotaSummary(
   document: unknown,
   planLabel: string | null = null,
-  nowMs: number = Date.now(),
-  timeZone: string = process.env.TZ || "Europe/Warsaw",
+  _nowMs: number = Date.now(),
+  _timeZone: string = process.env.TZ || "Europe/Warsaw",
 ): UsageReport {
   const parsed = summarySchema.safeParse(document);
   if (!parsed.success) throw new UsageError("Antigravity returned an invalid quota summary (expected groups).");
@@ -121,13 +121,17 @@ export function mapQuotaSummary(
   const windows = BUCKETS.map(({ id, label, shortLabel }) => {
     const bucket = byId.get(id);
     const remaining = bucket?.remainingFraction;
-    const usedPct = typeof remaining === "number" && Number.isFinite(remaining)
+    const hasReading = typeof remaining === "number" && Number.isFinite(remaining);
+    const statusDot = hasReading ? (remaining < 1 ? "🟢" : "🔴") : "";
+    const windowLabel = statusDot ? `${statusDot} ${label}` : label;
+    const windowShortLabel = statusDot ? `${statusDot} ${shortLabel}` : shortLabel;
+    const usedPct = hasReading
       ? Math.max(0, Math.min(100, (1 - remaining) * 100)) : null;
     const resetsAtMs = timestampMs(bucket?.resetTime);
     return windowFromUsedPct({
       id,
-      label,
-      shortLabel,
+      label: windowLabel,
+      shortLabel: windowShortLabel,
       summary: true,
       utilizationPct: usedPct,
       resetsAt: resetsAtMs === null ? null : new Date(resetsAtMs).toISOString(),
@@ -147,36 +151,6 @@ export function mapQuotaSummary(
   }
   if (windows.some((window) => window.usedPct === null)) {
     details.push({ id: "missing-buckets", label: "Quota data", value: "Some quota buckets were omitted or had no valid reading; their usage is unknown, not zero." });
-  }
-  const resetRows: UsageDetail[] = [];
-  for (const { id, label } of BUCKETS) {
-    const bucket = byId.get(id);
-    const resetsAtMs = timestampMs(bucket?.resetTime);
-    if (resetsAtMs !== null) {
-      const remaining = bucket?.remainingFraction;
-      const isUsed = typeof remaining === "number" && Number.isFinite(remaining) ? remaining < 1 : false;
-      const statusDot = isUsed ? "🟢" : "🔴";
-      const timeRemaining = formatRemainingReset(resetsAtMs, nowMs);
-      const exactDate = formatResetDate(resetsAtMs, timeZone);
-      resetRows.push({
-        id: `${id}-reset`,
-        label: `${label} reset`,
-        value: `${timeRemaining} (${exactDate}) ${statusDot}`,
-      });
-    }
-  }
-  const DIVIDER_LINE = "─".repeat(50);
-  for (let i = 0; i < resetRows.length; i++) {
-    const row = resetRows[i];
-    if (!row) continue;
-    if (i > 0) {
-      details.push({
-        id: `reset-divider-${i}`,
-        label: DIVIDER_LINE,
-        value: "",
-      });
-    }
-    details.push(row);
   }
   return {
     status: "available",
