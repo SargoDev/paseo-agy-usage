@@ -100,7 +100,7 @@ export function readTierLabel(document: unknown): string | null {
 export function mapQuotaSummary(
   document: unknown,
   planLabel: string | null = null,
-  _nowMs: number = Date.now(),
+  nowMs: number = Date.now(),
   _timeZone: string = process.env.TZ || "Europe/Warsaw",
 ): UsageReport {
   const parsed = summarySchema.safeParse(document);
@@ -122,12 +122,14 @@ export function mapQuotaSummary(
     const bucket = byId.get(id);
     const remaining = bucket?.remainingFraction;
     const hasReading = typeof remaining === "number" && Number.isFinite(remaining);
-    const statusDot = hasReading ? (remaining < 1 ? "🟢" : "🔴") : "";
+    const resetsAtMs = timestampMs(bucket?.resetTime);
+    const isResetActive = resetsAtMs !== null && resetsAtMs > nowMs;
+    const isStarted = hasReading && (remaining < 1 || isResetActive);
+    const statusDot = hasReading ? (isStarted ? "🟢" : "🔴") : "";
     const windowLabel = statusDot ? `${statusDot} ${label}` : label;
     const windowShortLabel = statusDot ? `${statusDot} ${shortLabel}` : shortLabel;
     const usedPct = hasReading
       ? Math.max(0, Math.min(100, (1 - remaining) * 100)) : null;
-    const resetsAtMs = timestampMs(bucket?.resetTime);
     return windowFromUsedPct({
       id,
       label: windowLabel,

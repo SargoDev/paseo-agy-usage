@@ -233,20 +233,24 @@ test("formatRemainingReset accurately formats days, hours, and minutes countdown
   assert.equal(formatRemainingReset(base - 1000, base), "Ready to reset");
 });
 
-test("quota window labels include green/red status dots based on remainingFraction", () => {
+test("quota window labels include green/red status dots based on remainingFraction or active countdown", () => {
   const document = quota([
     { bucketId: "gemini-5h", remainingFraction: 1, resetTime: "2030-01-01T05:00:00Z" },
     { bucketId: "gemini-weekly", remainingFraction: 1 },
-    { bucketId: "gemini-argon-wtu-weekly", remainingFraction: 1 },
+    { bucketId: "gemini-argon-wtu-weekly", remainingFraction: 1, resetTime: "2029-12-31T23:59:00Z" },
     { bucketId: "3p-5h", remainingFraction: 0.85, resetTime: "2030-01-01T04:00:00Z" },
     { bucketId: "3p-weekly", remainingFraction: 1 },
   ]);
   const report = mapQuotaSummary(document, null, NOW, "Europe/Warsaw");
   assert.equal(report.status, "available");
-  assert.equal(report.windows.find(({ id }) => id === "gemini-5h")?.label, "🔴 Gemini · 5h");
-  assert.equal(report.windows.find(({ id }) => id === "gemini-5h")?.shortLabel, "🔴 Gemini 5h");
+  assert.equal(report.windows.find(({ id }) => id === "gemini-5h")?.label, "🟢 Gemini · 5h");
+  assert.equal(report.windows.find(({ id }) => id === "gemini-5h")?.shortLabel, "🟢 Gemini 5h");
+  assert.equal(report.windows.find(({ id }) => id === "gemini-weekly")?.label, "🔴 Gemini · Weekly");
+  assert.equal(report.windows.find(({ id }) => id === "gemini-weekly")?.shortLabel, "🔴 Gemini wk");
+  assert.equal(report.windows.find(({ id }) => id === "gemini-argon-wtu-weekly")?.label, "🔴 Argon · Weekly");
   assert.equal(report.windows.find(({ id }) => id === "3p-5h")?.label, "🟢 Claude & GPT · 5h");
   assert.equal(report.windows.find(({ id }) => id === "3p-5h")?.shortLabel, "🟢 3P 5h");
+  assert.equal(report.windows.find(({ id }) => id === "3p-weekly")?.label, "🔴 Claude & GPT · Weekly");
   assert.deepEqual(report.details, []);
 });
 
