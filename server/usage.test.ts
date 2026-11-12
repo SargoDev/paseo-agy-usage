@@ -15,7 +15,6 @@ const QUOTA = quota([
   { bucketId: "3p-weekly", remainingFraction: 0 },
   { bucketId: "3p-5h", remainingFraction: 0.1, resetTime: "2030-01-01T02:30:00Z" },
   { bucketId: "gemini-weekly", remainingFraction: 0.25, resetTime: "2030-01-08T00:00:00Z" },
-  { bucketId: "gemini-argon-wtu-weekly", remainingFraction: 0.8 },
   { bucketId: "gemini-5h", remainingFraction: 1 },
 ]);
 
@@ -70,11 +69,27 @@ test("a signed-in account produces the email footer, plan badge and four quota w
   assert.ok(report.status === "available");
   assert.equal(report.planLabel, "Google AI Pro");
   assert.deepEqual(report.windows.map(({ id, remainingPct }) => [id, remainingPct]), [
-    ["gemini-5h", 100], ["gemini-weekly", 25], ["gemini-argon-wtu-weekly", 80], ["3p-5h", 10], ["3p-weekly", 0],
+    ["gemini-5h", 100], ["gemini-weekly", 25], ["3p-5h", 10], ["3p-weekly", 0],
   ]);
   assert.equal(report.windows.find(({ id }) => id === "gemini-weekly")?.resetsAt, "2030-01-08T00:00:00.000Z");
   assert.equal(report.windows.find(({ id }) => id === "gemini-5h")?.label, "🔴 Gemini · 5h");
   assert.equal(report.windows.find(({ id }) => id === "3p-5h")?.label, "🟢 Claude & GPT · 5h");
+  assert.deepEqual(report.details, []);
+});
+
+test("a separately metered Gemini 4 Argon pool adds its weekly window", async () => {
+  const withArgon = quota([
+    ...QUOTA.groups.flatMap(({ buckets }) => buckets),
+    { bucketId: "gemini-argon-wtu-weekly", remainingFraction: 0.75, resetTime: "2030-01-08T00:00:00Z" },
+  ]);
+  const report = await usage({ fetchApi: async (url) => json(String(url) === PLAN_URL
+    ? { paidTier: { id: "g1-pro-tier" } }
+    : withArgon) }).fetch(INPUT);
+  assert.ok(report.status === "available");
+  assert.deepEqual(report.windows.map(({ id, remainingPct }) => [id, remainingPct]), [
+    ["gemini-5h", 100], ["gemini-weekly", 25], ["3p-5h", 10], ["3p-weekly", 0], ["gemini-argon-wtu-weekly", 75],
+  ]);
+  assert.equal(report.windows.at(-1)?.label, "🟢 Gemini 4 Argon · Weekly");
   assert.deepEqual(report.details, []);
 });
 
@@ -117,7 +132,7 @@ test("free-tier cards explain the plan while omitted quotas remain unknown", asy
     : quota([{ bucketId: "gemini-weekly", remainingFraction: 0.5 }])) }).fetch(INPUT);
   assert.ok(report.status === "available");
   assert.equal(report.planLabel, "Free tier");
-  assert.deepEqual(report.windows.map(({ remainingPct }) => remainingPct), [null, 50, null, null, null]);
+  assert.deepEqual(report.windows.map(({ remainingPct }) => remainingPct), [null, 50, null, null]);
   assert.ok(report.details?.some(({ value }) => value.includes("weekly buckets")));
 });
 
@@ -247,7 +262,7 @@ test("quota window labels include green/red status dots based on remainingFracti
   assert.equal(report.windows.find(({ id }) => id === "gemini-5h")?.shortLabel, "🟢 Gemini 5h");
   assert.equal(report.windows.find(({ id }) => id === "gemini-weekly")?.label, "🔴 Gemini · Weekly");
   assert.equal(report.windows.find(({ id }) => id === "gemini-weekly")?.shortLabel, "🔴 Gemini wk");
-  assert.equal(report.windows.find(({ id }) => id === "gemini-argon-wtu-weekly")?.label, "🔴 Argon · Weekly");
+  assert.equal(report.windows.find(({ id }) => id === "gemini-argon-wtu-weekly")?.label, "🔴 Gemini 4 Argon · Weekly");
   assert.equal(report.windows.find(({ id }) => id === "3p-5h")?.label, "🟢 Claude & GPT · 5h");
   assert.equal(report.windows.find(({ id }) => id === "3p-5h")?.shortLabel, "🟢 3P 5h");
   assert.equal(report.windows.find(({ id }) => id === "3p-weekly")?.label, "🔴 Claude & GPT · Weekly");
