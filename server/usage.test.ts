@@ -72,7 +72,7 @@ test("a signed-in account produces the email footer, plan badge and four quota w
     ["gemini-5h", 100], ["gemini-weekly", 25], ["3p-5h", 10], ["3p-weekly", 0],
   ]);
   assert.equal(report.windows.find(({ id }) => id === "gemini-weekly")?.resetsAt, "2030-01-08T00:00:00.000Z");
-  assert.equal(report.windows.find(({ id }) => id === "gemini-5h")?.label, "🔴 Gemini · 5h");
+  assert.equal(report.windows.find(({ id }) => id === "gemini-5h")?.label, "🔴 Gemini (Hydrogen) · 5h");
   assert.equal(report.windows.find(({ id }) => id === "3p-5h")?.label, "🟢 Claude & GPT · 5h");
   assert.deepEqual(report.details, []);
 });
@@ -258,9 +258,9 @@ test("quota window labels include green/red status dots based on remainingFracti
   ]);
   const report = mapQuotaSummary(document, null, NOW, "Europe/Warsaw");
   assert.equal(report.status, "available");
-  assert.equal(report.windows.find(({ id }) => id === "gemini-5h")?.label, "🟢 Gemini · 5h");
+  assert.equal(report.windows.find(({ id }) => id === "gemini-5h")?.label, "🟢 Gemini (Hydrogen) · 5h");
   assert.equal(report.windows.find(({ id }) => id === "gemini-5h")?.shortLabel, "🟢 Gemini 5h");
-  assert.equal(report.windows.find(({ id }) => id === "gemini-weekly")?.label, "🔴 Gemini · Weekly");
+  assert.equal(report.windows.find(({ id }) => id === "gemini-weekly")?.label, "🔴 Gemini (Hydrogen) · Weekly");
   assert.equal(report.windows.find(({ id }) => id === "gemini-weekly")?.shortLabel, "🔴 Gemini wk");
   assert.equal(report.windows.find(({ id }) => id === "gemini-argon-wtu-weekly")?.label, "🔴 Gemini 4 Argon · Weekly");
   assert.equal(report.windows.find(({ id }) => id === "3p-5h")?.label, "🟢 Claude & GPT · 5h");
@@ -272,4 +272,40 @@ test("quota window labels include green/red status dots based on remainingFracti
 test("formatResetDate formats timestamp into DD.MM.YYYY HH:mm in target timezone", () => {
   const ms = Date.parse("2026-10-30T09:35:00Z");
   assert.equal(formatResetDate(ms, "Europe/Warsaw"), "30.10.2026 10:35");
+});
+
+test("Gemini 4 Carbon pool, dynamic bucket discovery and model group descriptions in details", () => {
+  const document = {
+    groups: [
+      {
+        displayName: "Gemini Models",
+        description: "Models within this group: Gemini 4 Hydrogen, Gemini 3.8 Flash",
+        buckets: [
+          { bucketId: "gemini-5h", remainingFraction: 0.9 },
+          { bucketId: "gemini-weekly", remainingFraction: 0.7 },
+        ],
+      },
+      {
+        displayName: "Gemini 4 Carbon",
+        description: "Gemini 4 Carbon frontier reasoning pool",
+        buckets: [
+          { bucketId: "gemini-carbon-wtu-weekly", remainingFraction: 0.85, resetTime: "2030-01-08T00:00:00Z" },
+        ],
+      },
+      {
+        displayName: "Future Pool",
+        buckets: [
+          { bucketId: "gemini-custom-experimental-weekly", displayName: "Custom Experimental Limit", remainingFraction: 1 },
+        ],
+      },
+    ],
+  };
+  const report = mapQuotaSummary(document, "Google AI Ultra", NOW, "Europe/Warsaw");
+  assert.ok(report.status === "available");
+  if (report.status !== "available") throw new Error("unreachable");
+  assert.equal(report.planLabel, "Google AI Ultra");
+  assert.equal(report.windows.find(({ id }) => id === "gemini-carbon-wtu-weekly")?.label, "🟢 Gemini 4 Carbon · Weekly");
+  assert.equal(report.windows.find(({ id }) => id === "gemini-custom-experimental-weekly")?.label, "🔴 Custom Experimental");
+  assert.ok(report.details?.some((d) => d.id === "models-gemini-models" && d.value.includes("Gemini 4 Hydrogen")));
+  assert.ok(report.details?.some((d) => d.id === "models-gemini-4-carbon" && d.value.includes("Carbon")));
 });

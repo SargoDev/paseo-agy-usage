@@ -12,22 +12,59 @@ import { UsageError } from "./errors.js";
 // These period names are justified by the API's bucketId, not response order or
 // time until reset. durationMs is not part of Paseo 0.11's UsageWindow contract.
 const BUCKETS: readonly { id: string; label: string; shortLabel: string; optional?: true }[] = [
-  { id: "gemini-5h", label: "Gemini · 5h", shortLabel: "Gemini 5h" },
-  { id: "gemini-weekly", label: "Gemini · Weekly", shortLabel: "Gemini wk" },
+  // Gemini pool includes Gemini 4 Hydrogen and Gemini 3.8 Flash
+  { id: "gemini-5h", label: "Gemini (Hydrogen) · 5h", shortLabel: "Gemini 5h" },
+  { id: "gemini-weekly", label: "Gemini (Hydrogen) · Weekly", shortLabel: "Gemini wk" },
+  // 3P pool includes Claude Opus 5.5, Claude Sonnet 5.5, GPT-OSS 120B
   { id: "3p-5h", label: "Claude & GPT · 5h", shortLabel: "3P 5h" },
   { id: "3p-weekly", label: "Claude & GPT · Weekly", shortLabel: "3P wk" },
-  // Paid plans meter Gemini 4 Argon in a pool of its own. Other logins do not report it.
+  // Paid plans meter Gemini 4 Argon & Orchestrator in a pool of their own. Other logins do not report it.
   { id: "gemini-argon-wtu-weekly", label: "Gemini 4 Argon · Weekly", shortLabel: "Argon wk", optional: true },
+  { id: "gemini-argon-5h", label: "Gemini 4 Argon · 5h", shortLabel: "Argon 5h", optional: true },
+  { id: "gemini-argon-weekly", label: "Gemini 4 Argon · Weekly", shortLabel: "Argon wk", optional: true },
+  // Gemini 4 Carbon (frontier reasoning models)
+  { id: "gemini-carbon-wtu-weekly", label: "Gemini 4 Carbon · Weekly", shortLabel: "Carbon wk", optional: true },
+  { id: "gemini-carbon-weekly", label: "Gemini 4 Carbon · Weekly", shortLabel: "Carbon wk", optional: true },
+  { id: "gemini-carbon-5h", label: "Gemini 4 Carbon · 5h", shortLabel: "Carbon 5h", optional: true },
+  { id: "gemini-carbon-wtu-5h", label: "Gemini 4 Carbon · 5h", shortLabel: "Carbon 5h", optional: true },
+  // Orchestrator dedicated pools if reported separately
+  { id: "gemini-orchestrator-wtu-weekly", label: "Gemini Orchestrator · Weekly", shortLabel: "Orchestrator wk", optional: true },
+  { id: "gemini-orchestrator-5h", label: "Gemini Orchestrator · 5h", shortLabel: "Orchestrator 5h", optional: true },
 ];
 
 const summarySchema = z.object({ groups: z.array(z.unknown()) });
-const groupSchema = z.object({ buckets: z.array(z.unknown()) });
+const groupSchema = z.object({
+  displayName: z.string().optional(),
+  description: z.string().optional(),
+  buckets: z.array(z.unknown()),
+});
 const bucketSchema = z.object({
   bucketId: z.string(),
+  displayName: z.string().optional(),
+  window: z.string().optional(),
+  description: z.string().optional(),
   remainingFraction: z.unknown().optional(),
   resetTime: z.unknown().optional(),
 });
 type Bucket = z.infer<typeof bucketSchema>;
+
+export function formatDynamicBucketLabel(
+  bucketId: string,
+  displayName?: string,
+): { label: string; shortLabel: string } {
+  if (displayName) {
+    const cleanDisplay = displayName.replace(/\s+(limit|remaining)/gi, "").trim();
+    return { label: cleanDisplay, shortLabel: cleanDisplay };
+  }
+  const parts = bucketId.split("-").filter((p) => p !== "wtu");
+  const period = parts.find((p) => p === "5h" || p === "weekly" || p === "daily");
+  const nameParts = parts.filter((p) => p !== "5h" && p !== "weekly" && p !== "daily");
+  const modelName = nameParts.map((p) => p.charAt(0).toUpperCase() + p.slice(1)).join(" ");
+  const periodLabel = period === "5h" ? "5h" : period === "weekly" ? "Weekly" : period === "daily" ? "Daily" : "";
+  const label = periodLabel ? `${modelName} · ${periodLabel}` : modelName;
+  const shortLabel = periodLabel ? `${modelName} ${periodLabel === "Weekly" ? "wk" : periodLabel}` : modelName;
+  return { label, shortLabel };
+}
 
 export function formatRemainingReset(
   resetTimeMs: number,
@@ -119,7 +156,8 @@ export function mapQuotaSummary(
     return unavailable({ kind: "no_quota", detail: "Antigravity did not report the Gemini or Claude & GPT quota pools for this login." });
   }
 
-  const windows = BUCKETS.filter(({ id, optional }) => !optional || byId.has(id)).map(({ id, label, shortLabel }) => {
+  const recognizedBucketIds = new Set(BUCKETS.map(({ id }) => id));
+  const definedWindows = BUCKETS.filter(({ id, optional }) => !optional || byId.has(id)).map(({ id, label, shortLabel }) => {
     const bucket = byId.get(id);
     const remaining = bucket?.remainingFraction;
     const hasReading = typeof remaining === "number" && Number.isFinite(remaining);
@@ -141,10 +179,47 @@ export function mapQuotaSummary(
       tone: toneFromUsedPct(usedPct),
     });
   });
+
+  const dynamicWindows: ReturnType<typeof windowFromUsedPct>[] = [];
+  for (const [bucketId, bucket] of byId.entries()) {
+    if (recognizedBucketIds.has(bucketId)) continue;
+    const remaining = bucket?.remainingFraction;
+    const hasReading = typeof remaining === "number" && Number.isFinite(remaining);
+    const resetsAtMs = timestampMs(bucket?.resetTime);
+    const isResetActive = resetsAtMs !== null && resetsAtMs > nowMs;
+    const isStarted = hasReading && (remaining < 1 || isResetActive);
+    const statusDot = hasReading ? (isStarted ? "🟢" : "🔴") : "";
+    const dynamicMeta = formatDynamicBucketLabel(bucketId, bucket.displayName);
+    const windowLabel = statusDot ? `${statusDot} ${dynamicMeta.label}` : dynamicMeta.label;
+    const windowShortLabel = statusDot ? `${statusDot} ${dynamicMeta.shortLabel}` : dynamicMeta.shortLabel;
+    const usedPct = hasReading
+      ? Math.max(0, Math.min(100, (1 - remaining) * 100)) : null;
+    dynamicWindows.push(windowFromUsedPct({
+      id: bucketId,
+      label: windowLabel,
+      shortLabel: windowShortLabel,
+      summary: true,
+      utilizationPct: usedPct,
+      resetsAt: resetsAtMs === null ? null : new Date(resetsAtMs).toISOString(),
+      tone: toneFromUsedPct(usedPct),
+    }));
+  }
+
+  const windows = [...definedWindows, ...dynamicWindows];
   if (windows.every((window) => window.usedPct === null)) {
     throw new UsageError("Antigravity quota buckets contain no valid remainingFraction readings.");
   }
   const details: UsageDetail[] = [];
+  for (const rawGroup of parsed.data.groups) {
+    const group = groupSchema.safeParse(rawGroup);
+    if (group.success && group.data.displayName && group.data.description) {
+      details.push({
+        id: `models-${group.data.displayName.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
+        label: group.data.displayName,
+        value: group.data.description,
+      });
+    }
+  }
   if (planLabel === "Free tier") {
     details.push({
       id: "free-tier-note",
