@@ -72,7 +72,7 @@ test("a signed-in account produces the email footer, plan badge and four quota w
     ["gemini-5h", 100], ["gemini-weekly", 25], ["3p-5h", 10], ["3p-weekly", 0],
   ]);
   assert.equal(report.windows.find(({ id }) => id === "gemini-weekly")?.resetsAt, "2030-01-08T00:00:00.000Z");
-  assert.equal(report.windows.find(({ id }) => id === "gemini-5h")?.label, "🔴 Gemini (Hydrogen) · 5h");
+  assert.equal(report.windows.find(({ id }) => id === "gemini-5h")?.label, "🔴 Gemini · 5h");
   assert.equal(report.windows.find(({ id }) => id === "3p-5h")?.label, "🟢 Claude & GPT · 5h");
   assert.deepEqual(report.details, []);
 });
@@ -258,9 +258,9 @@ test("quota window labels include green/red status dots based on remainingFracti
   ]);
   const report = mapQuotaSummary(document, null, NOW, "Europe/Warsaw");
   assert.equal(report.status, "available");
-  assert.equal(report.windows.find(({ id }) => id === "gemini-5h")?.label, "🟢 Gemini (Hydrogen) · 5h");
+  assert.equal(report.windows.find(({ id }) => id === "gemini-5h")?.label, "🟢 Gemini · 5h");
   assert.equal(report.windows.find(({ id }) => id === "gemini-5h")?.shortLabel, "🟢 Gemini 5h");
-  assert.equal(report.windows.find(({ id }) => id === "gemini-weekly")?.label, "🔴 Gemini (Hydrogen) · Weekly");
+  assert.equal(report.windows.find(({ id }) => id === "gemini-weekly")?.label, "🔴 Gemini · Weekly");
   assert.equal(report.windows.find(({ id }) => id === "gemini-weekly")?.shortLabel, "🔴 Gemini wk");
   assert.equal(report.windows.find(({ id }) => id === "gemini-argon-wtu-weekly")?.label, "🔴 Gemini 4 Argon · Weekly");
   assert.equal(report.windows.find(({ id }) => id === "3p-5h")?.label, "🟢 Claude & GPT · 5h");
@@ -306,6 +306,6 @@ test("Gemini 4 Carbon pool, dynamic bucket discovery and model group description
   assert.equal(report.planLabel, "Google AI Ultra");
   assert.equal(report.windows.find(({ id }) => id === "gemini-carbon-wtu-weekly")?.label, "🟢 Gemini 4 Carbon · Weekly");
   assert.equal(report.windows.find(({ id }) => id === "gemini-custom-experimental-weekly")?.label, "🔴 Custom Experimental");
-  assert.ok(report.details?.some((d) => d.id === "models-gemini-models" && d.value.includes("Gemini 4 Hydrogen")));
+  assert.ok(report.details?.some((d) => d.id === "models-gemini-models" && d.value.includes("Hydrogen")));
   assert.ok(report.details?.some((d) => d.id === "models-gemini-4-carbon" && d.value.includes("Carbon")));
 });

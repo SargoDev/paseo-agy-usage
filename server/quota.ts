@@ -13,8 +13,8 @@ import { UsageError } from "./errors.js";
 // time until reset. durationMs is not part of Paseo 0.11's UsageWindow contract.
 const BUCKETS: readonly { id: string; label: string; shortLabel: string; optional?: true }[] = [
   // Gemini pool includes Gemini 4 Hydrogen and Gemini 3.8 Flash
-  { id: "gemini-5h", label: "Gemini (Hydrogen) · 5h", shortLabel: "Gemini 5h" },
-  { id: "gemini-weekly", label: "Gemini (Hydrogen) · Weekly", shortLabel: "Gemini wk" },
+  { id: "gemini-5h", label: "Gemini · 5h", shortLabel: "Gemini 5h" },
+  { id: "gemini-weekly", label: "Gemini · Weekly", shortLabel: "Gemini wk" },
   // 3P pool includes Claude Opus 5.5, Claude Sonnet 5.5, GPT-OSS 120B
   { id: "3p-5h", label: "Claude & GPT · 5h", shortLabel: "3P 5h" },
   { id: "3p-weekly", label: "Claude & GPT · Weekly", shortLabel: "3P wk" },
@@ -64,6 +64,38 @@ export function formatDynamicBucketLabel(
   const label = periodLabel ? `${modelName} · ${periodLabel}` : modelName;
   const shortLabel = periodLabel ? `${modelName} ${periodLabel === "Weekly" ? "wk" : periodLabel}` : modelName;
   return { label, shortLabel };
+}
+
+export function formatCompactGroupModels(
+  displayName?: string,
+  description?: string,
+): { label: string; value: string } | null {
+  if (!displayName || !description) return null;
+  const name = displayName.toLowerCase();
+
+  if (name.includes("gemini models") || name === "gemini") {
+    return { label: "Gemini pool", value: "Hydrogen · Flash 3.8" };
+  }
+  if (name.includes("argon")) {
+    return { label: "Argon pool", value: "Argon 4 · Orchestrator" };
+  }
+  if (name.includes("claude") || name.includes("gpt") || name.includes("3p")) {
+    return { label: "Claude & GPT", value: "Opus 5.5 · Sonnet · GPT" };
+  }
+  if (name.includes("carbon")) {
+    return { label: "Carbon pool", value: "Gemini 4 Carbon" };
+  }
+
+  // Fallback for custom or future pools
+  let cleanValue = description;
+  const prefixMatch = description.match(/models within this group:\s*(.*)/i);
+  if (prefixMatch && prefixMatch[1]) {
+    cleanValue = prefixMatch[1].replace(/Gemini\s+/gi, "").replace(/Claude\s+/gi, "").trim();
+  } else if (cleanValue.length > 25) {
+    cleanValue = cleanValue.slice(0, 22) + "...";
+  }
+  const cleanLabel = displayName.replace(/\s+models$/i, "").trim();
+  return { label: cleanLabel, value: cleanValue };
 }
 
 export function formatRemainingReset(
@@ -213,11 +245,14 @@ export function mapQuotaSummary(
   for (const rawGroup of parsed.data.groups) {
     const group = groupSchema.safeParse(rawGroup);
     if (group.success && group.data.displayName && group.data.description) {
-      details.push({
-        id: `models-${group.data.displayName.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
-        label: group.data.displayName,
-        value: group.data.description,
-      });
+      const compact = formatCompactGroupModels(group.data.displayName, group.data.description);
+      if (compact) {
+        details.push({
+          id: `models-${group.data.displayName.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
+          label: compact.label,
+          value: compact.value,
+        });
+      }
     }
   }
   if (planLabel === "Free tier") {
